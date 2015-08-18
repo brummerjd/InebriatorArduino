@@ -6,25 +6,16 @@
 
 SoftwareSerial bluetoothSerial(RxD,TxD);
 
-char MESSAGE_BREAK[1] = {1};
-char MESSAGE_END[1] = {2};
+char MESSAGE_BREAK = 1;
+char MESSAGE_END = 2;
 
-//char REQUEST = 14;
-//char UPDATE = 15;
-char RESPONSE = 16;
-//char MENU = 17;
-char REQUEST_MENU = 17;
-char RESPONSE_MENU = 18;
+char REQUEST_DRINK = 17;
+char RESPONSE_MAKING_DRINK = 18;
 char NULL_CHAR = 255;
 
-//char MESSAGE_BREAK = '`';
-//char MESSAGE_END = '~';
-
-//String REQUEST_MENU = "REQUEST`MENU";
-
-char m[20] = {0};
-char recvChar[1] = {0};
-String message = "";
+char m[60] = {0};
+char recvChar = 0;
+byte m_length = 0;
 
 void setup()
 {  
@@ -33,19 +24,10 @@ void setup()
   pinMode(TxD, OUTPUT);
   setupBluetoothConnection();
   
-//  char something[] = "R";
-//  char somethingelse[] = {85};
-//  strcat(m, something);
-//  strcat(m, somethingelse);
-//  Serial.println(m[0]);
-//  Serial.println(m[1]);
-  
-  //char test[5] = {'h', 'e', 'l', 'l', 'o'};
-  //sendMessage(test);
-  
-  //printMemory();
-  sendMenu();
-  //handleMessage("UPDATE<>ADD_LIQUOR`Rum`2");
+//  char drink[25] = { REQUEST_DRINK, '1', MESSAGE_BREAK, '0', MESSAGE_BREAK,
+//    '1', '.', '5', MESSAGE_BREAK, '0', MESSAGE_BREAK, '0', MESSAGE_BREAK, '0',
+//    MESSAGE_BREAK, '0', '.', '2', '5', MESSAGE_BREAK, '0', MESSAGE_END };
+//  handleMessage(drink);
 }
 
 void loop()
@@ -54,20 +36,25 @@ void loop()
     
     if(bluetoothSerial.available())
     {
-      recvChar[0] = bluetoothSerial.read();
-      if (recvChar[0] == MESSAGE_END[0])
+      recvChar = bluetoothSerial.read();
+      Serial.println(m_length);
+      // Append char to received message; there has to be a better way of doing this...
+      m[m_length] = recvChar;
+      m_length++;
+        
+      if (recvChar == MESSAGE_END)
       {
-        //Serial.println(message);
+        // Show what's happening in Serial window
+        Serial.print("Received: ");
+        printMessage(m);
+        
         handleMessage(m);
-        sendMessage(m);
+        
+        // Reset to receive next message
         memset(m, 0, sizeof(m));
-      }
-      else
-      {
-        strcat(m, recvChar);
+        m_length = 0;
       }
     }
-    
   }
 }
 
@@ -76,125 +63,70 @@ void setupBluetoothConnection()
   bluetoothSerial.begin(9600);
 }
 
-void sendMessage(char message[])
+void sendMessage(char message[], byte length)
 {
-  for (int i = 0; i < 20; i++)
+  Serial.print("Send: ");
+  for (byte i = 0; i < length; i++)
   {
-    //bluetoothSerial.print(message[i]);
+    bluetoothSerial.print(message[i]);
     Serial.print(message[i]);
   }
-  //bluetoothSerial.print(MESSAGE_END);
-
-//  int length = message.length() + 2;
-//  char c[length];
-//  
-//  (message + MESSAGE_END).toCharArray(c, length);
-//  
-//  for (int i = 0; i < length; i++)
-//  {
-//    bluetoothSerial.print(c[i]);
-//  }
+  bluetoothSerial.print(MESSAGE_END);
+  Serial.println();
 }
 
 void handleMessage(char message[])
 {
-  if (message[0] == REQUEST_MENU)
+  printMessage(message);
+  if (message[0] == REQUEST_DRINK)
   {
-    sendMenu();
+    Serial.println("Making drink");
+    char response[] = {RESPONSE_MAKING_DRINK};
+    sendMessage(response, 1);
+    
+    mixDrink(message+1);
   }
-//  if (m.startsWith("REQUEST"))
-//  {
-//    m = m.substring(m.indexOf(MESSAGE_BREAK)+1);
-//    if (m.startsWith("MENU"))
-//    {
-//      sendMenu();
-//    }
-//  }
-//  else if (m.startsWith("UPDATE"))
-//  {
-//    m = m.substring(m.indexOf("<>")+2);
-//    if (m.startsWith("ADD_LIQUOR"))
-//    {
-//      m = m.substring(m.indexOf(MESSAGE_BREAK)+1);
-//      String name = m.substring(0,m.indexOf(MESSAGE_BREAK));
-//      int nozzle = m.substring(m.indexOf(MESSAGE_BREAK)+1).toInt();
-//    }
-//  }
 }
 
-void sendMenu()
+void mixDrink(char drink[])
 {
-  //String menu1 = String(RESPONSE) + MESSAGE_BREAK + String(MENU);
+  float times[8];
+  byte drink_num = 0;
+  byte pointer = 0;
+  byte start_of_prev_drink = 0;
   
-  char menu[180];
-  for (int i = 0; i < 8; i++)
+  while(1)
   {
-    char liquor[20];
-    for (int j = 0; j < 20; j++)
+    if (drink[pointer] == MESSAGE_BREAK || drink[pointer] == MESSAGE_END)
     {
-      liquor[j] = EEPROM.read(i*20 + j);
+      char time_arr[pointer - start_of_prev_drink];
+      memcpy(time_arr, &drink[start_of_prev_drink], pointer - start_of_prev_drink);
+      times[drink_num] = atof(time_arr);
+      
+      start_of_prev_drink = pointer + 1;
+      drink_num++;
+      
+      if (drink[pointer] == MESSAGE_END) { break; }
     }
     
-    if (liquor[0] != NULL_CHAR)
-    {
-      Serial.println(liquor[0]);
-      
-      //char pos[1];
-      //String(i+1).toCharArray(pos, 1);
-      
-      //strcat(menu, MESSAGE_BREAK);
-      //strcat(menu, pos);
-      //strcat(menu, MESSAGE_BREAK);
-      //strcat(menu, liquor);
-      memset(liquor, 0, sizeof(liquor));
-    }
+    pointer++;
   }
   
-  sendMessage(menu);
-  
-//  String menu = "RESPONSE<>MENU";
-//  for (int i = 0; i < 8; i++)
-//  {
-//    String liquor = "";
-//    for (int j = 0; j < 20; j++)
-//    {
-//      byte n = EEPROM.read(i*20 + j);
-//      liquor += n;
-//    }
-//    
-//    if (!liquor.equals(""))
-//    {
-//      menu += MESSAGE_BREAK + String(i+1) + MESSAGE_BREAK + liquor;
-//      liquor = "";
-//    }
-//    
-//    sendMessage(menu);
-//  }
-  
-  //Serial.println(menu);
-    
-  //sendMessage(menu);
+  Serial.println("Drink recipe: ");
+  for (byte i = 0; i < 8; i++)
+  {
+    Serial.println(times[i]);
+  }
 }
 
-void printMemory()
+void printMessage(char message[])
 {
-//  String l = "Liquor 1";
-//  int length = l.length() + 1;
-//  char c1[length];
-//  
-//  l.toCharArray(c1, length);
-//  for (int i = 0; i < length; i++)
-//  {
-//    EEPROM.write(i, c1[i]);
-//  }
-  
-  for (int i = 0; i < 1024; i++)
+  byte i = 0;
+  while (1)
   {
-    if (i % 100 == 0)
-    {
-      Serial.println();
-    }
-    //Serial.print(str(EEPROM.read(i)));
-    Serial.print(EEPROM.read(i));
+    if (message[i] == MESSAGE_END) { break; }
+    Serial.print(message[i]);
+    i++;
   }
+  Serial.println();
 }
